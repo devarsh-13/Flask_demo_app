@@ -17,6 +17,7 @@ def create_user():
 
     with driver.session() as session:
         session.run("CREATE (u:User {username: $username, email: $email})", username=username, email=email)
+        session.close()
 
     return jsonify({'message': 'User created successfully'}), 200
 
@@ -35,6 +36,7 @@ def create_post():
             "CREATE (p:Post {title: $title, content: $content})-[:CREATED_BY]->(u)",
             user_id=user_id, title=title, content=content
         )
+        session.close()
 
     return jsonify({'message': 'Post created and linked to the user successfully'}), 200
 
@@ -42,8 +44,8 @@ def create_post():
 @app.route('/user/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
     data = request.get_json()
-    new_username = data.get('new_username')
-    new_email = data.get('new_email')
+    new_username = data.get('username')
+    new_email = data.get('email')
 
     with driver.session() as session:
         session.run(
@@ -51,6 +53,7 @@ def update_user(user_id):
             "SET u.username = $new_username, u.email = $new_email",
             user_id=user_id, new_username=new_username, new_email=new_email
         )
+        session.close()
 
     return jsonify({'message': 'User updated successfully'}), 200
 
@@ -58,8 +61,8 @@ def update_user(user_id):
 @app.route('/post/<int:post_id>', methods=['PUT'])
 def update_post(post_id):
     data = request.get_json()
-    new_title = data.get('new_title')
-    new_content = data.get('new_content')
+    new_title = data.get('title')
+    new_content = data.get('content')
 
     with driver.session() as session:
         session.run(
@@ -67,14 +70,16 @@ def update_post(post_id):
             "SET p.title = $new_title, p.content = $new_content",
             post_id=post_id, new_title=new_title, new_content=new_content
         )
+        session.close()
 
     return jsonify({'message': 'Post updated successfully'}), 200
 
 # API route to delete a user
-@app.route('/user/<user_id>', methods=['DELETE'])
+@app.route('/user/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     with driver.session() as session:
-        session.run("MATCH (u:User) WHERE ID(u) = $user_id DETACH DELETE u", user_id=user_id)
+        session.run("MATCH (u:User) WHERE id(u) = $user_id DETACH DELETE u", user_id=user_id)
+        session.close()
 
     return jsonify({'message': 'User deleted successfully'}), 200
 
@@ -83,19 +88,20 @@ def delete_user(user_id):
 def delete_post(post_id):
     with driver.session() as session:
         session.run("MATCH (p:Post) WHERE ID(p) = $post_id DETACH DELETE p", post_id=post_id)
+        session.close()
 
     return jsonify({'message': 'Post deleted successfully'}), 200
 
 
-@app.route('/usersss', methods=['GET'])
+@app.route('/users', methods=['GET'])
 def get_all_users():
-    with driver.session() as session:
-        result = session.run("MATCH (u:User) RETURN u.username AS username, u.email AS email")
-        if result:
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User) RETURN u.username AS username, u.email AS email")
             users = [{'username': record['username'], 'email': record['email']} for record in result]
             return jsonify({'users': users}), 200
-        else:
-            return jsonify({'message': 'User not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
         
 
 # API route to get a specific user
@@ -105,6 +111,7 @@ def get_user(user_id):
         result = session.run("MATCH (u:User) WHERE ID(u) = $user_id RETURN u", user_id=user_id)
         user = result.single()["u"] if result.single() else None
         if user:
+            session.close()
             return jsonify({'user': user}), 200
         else:
             return jsonify({'message': 'User not found'}), 404
@@ -114,6 +121,7 @@ def get_user(user_id):
 def get_all_posts():
     with driver.session() as session:
         result = session.run("MATCH (p:Post) RETURN p")
+        session.close()
         return jsonify({'posts': [record["p"] for record in result]})
 
 # API route to get a specific post
@@ -123,9 +131,11 @@ def get_post(post_id):
         result = session.run("MATCH (p:Post) WHERE ID(p) = $post_id RETURN p", post_id=post_id)
         post = result.single()["p"] if result.single() else None
         if post:
+            session.close()
             return jsonify({'post': post}), 200
         else:
             return jsonify({'message': 'Post not found'}), 404
+    
 
 if __name__ == '__main__':
     app.run(port=8000)
